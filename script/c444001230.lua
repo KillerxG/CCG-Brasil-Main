@@ -1,127 +1,155 @@
 -- The Vampire Castle
 local s, id = GetID()
+local SET_VAMPIRE = 0x8e
 
 function s.initial_effect(c)
-    -- Ativação com busca opcional
-    local e1 = Effect.CreateEffect(c)
+	-- 1. When this card is activated: You can add 1 "Vampire" monster from your Deck to your hand (HOPT)
+	local e1=Effect.CreateEffect(c)
 	e1:SetDescription(aux.Stringid(id, 0))
-    e1:SetCategory(CATEGORY_TOHAND + CATEGORY_SEARCH)
-    e1:SetType(EFFECT_TYPE_ACTIVATE)
-    e1:SetCode(EVENT_FREE_CHAIN)
-    e1:SetCountLimit(1, id, EFFECT_COUNT_CODE_OATH)
-    e1:SetOperation(s.activate)
-    c:RegisterEffect(e1)
+	e1:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
+	e1:SetType(EFFECT_TYPE_ACTIVATE)
+	e1:SetCode(EVENT_FREE_CHAIN)
+	e1:SetCountLimit(1, id, EFFECT_COUNT_CODE_OATH)
+	e1:SetOperation(s.activate)
+	c:RegisterEffect(e1)
 
-    -- Todos os monstros no Campo e GY viram DARK Zombie (exceto Vampire Hunter)
-    local e2 = Effect.CreateEffect(c)
-    e2:SetType(EFFECT_TYPE_FIELD)
-    e2:SetRange(LOCATION_FZONE)
-    e2:SetTargetRange(LOCATION_MZONE + LOCATION_GRAVE, LOCATION_MZONE + LOCATION_GRAVE)
-    e2:SetCode(EFFECT_CHANGE_RACE)
-    e2:SetTarget(s.typefilter)
-    e2:SetValue(RACE_ZOMBIE)
-    c:RegisterEffect(e2)
-    
-    local e3 = e2:Clone()
-    e3:SetCode(EFFECT_CHANGE_ATTRIBUTE)
-    e3:SetValue(ATTRIBUTE_DARK)
-    c:RegisterEffect(e3)
+	-- 2. Once per turn, if you would pay LP to activate a "Vampire" card or effect, send 1 "Vampire" card from Deck to GY instead (HOPT)
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id, 1))
+	e2:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e2:SetCode(EFFECT_LPCOST_REPLACE)
+	e2:SetRange(LOCATION_FZONE)
+	e2:SetCountLimit(1, {id, 1})
+	e2:SetCondition(s.lrcon)
+	e2:SetOperation(s.lrop)
+	c:RegisterEffect(e2)
 
-    -- Substituir custo de LP por envio do Deck para o GY
-    local e4 = Effect.CreateEffect(c)
-    e4:SetType(EFFECT_TYPE_FIELD + EFFECT_TYPE_CONTINUOUS) -- Corrigido: Adicionado CONTINUOUS
-    e4:SetCode(EFFECT_LPCOST_REPLACE)
-    e4:SetRange(LOCATION_FZONE)
-    e4:SetCondition(s.lrcon)
-    e4:SetOperation(s.lrop)
-    c:RegisterEffect(e4)
-
-    -- Retornar banido pro GY para Comprar 2 no próximo turno
-    local e5 = Effect.CreateEffect(c)
-    e5:SetDescription(aux.Stringid(id, 1))
-    e5:SetCategory(CATEGORY_TOGRAVE)
-    e5:SetType(EFFECT_TYPE_IGNITION)
-    e5:SetRange(LOCATION_FZONE)
-    e5:SetProperty(EFFECT_FLAG_CARD_TARGET)
-    e5:SetCountLimit(1)
-    e5:SetTarget(s.drawtg)
-    e5:SetOperation(s.drawop)
-    c:RegisterEffect(e5)
+	-- 3. Target 1 "Vampire" card in your GY or banishment; return to Deck (or GY, if banished), then you can destroy 1 "Vampire" card in hand or field (HOPT)
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id, 2))
+	e3:SetCategory(CATEGORY_TODECK+CATEGORY_TOGRAVE+CATEGORY_DESTROY)
+	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetProperty(EFFECT_FLAG_CARD_TARGET)
+	e3:SetRange(LOCATION_FZONE)
+	e3:SetCountLimit(1, {id, 2})
+	e3:SetTarget(s.rtg)
+	e3:SetOperation(s.rop)
+	c:RegisterEffect(e3)
 end
 
-s.listed_series = {0x8e}
+s.listed_series={SET_VAMPIRE}
 
 -- ==========================================
--- EFEITO 1: BUSCA NA ATIVAÇÃO
+-- 1. SEARCH ON ACTIVATION
 -- ==========================================
 function s.thfilter(c)
-    return c:IsSetCard(0x8e) and c:IsType(TYPE_MONSTER) and c:IsAbleToHand()
+	return c:IsSetCard(SET_VAMPIRE) and c:IsMonster() and c:IsAbleToHand()
 end
+
 function s.activate(e, tp, eg, ep, ev, re, r, rp)
-    if not e:GetHandler():IsRelateToEffect(e) then return end
-    local g = Duel.GetMatchingGroup(s.thfilter, tp, LOCATION_DECK, 0, nil)
-    if #g > 0 and Duel.SelectYesNo(tp, aux.Stringid(id, 0)) then -- "Deseja adicionar 1 monstro Vampire?"
-        Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_ATOHAND)
-        local sg = g:Select(tp, 1, 1, nil)
-        Duel.SendtoHand(sg, nil, REASON_EFFECT)
-        Duel.ConfirmCards(1 - tp, sg)
-    end
+	if not e:GetHandler():IsRelateToEffect(e) then return end
+	local g=Duel.GetMatchingGroup(s.thfilter, tp, LOCATION_DECK, 0, nil)
+	if #g>0 and Duel.SelectYesNo(tp, aux.Stringid(id, 0)) then
+		Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_ATOHAND)
+		local sg=g:Select(tp, 1, 1, nil)
+		Duel.SendtoHand(sg, nil, REASON_EFFECT)
+		Duel.ConfirmCards(1-tp, sg)
+	end
 end
 
 -- ==========================================
--- EFEITO 2 & 3: TORNAR DARK ZOMBIE
--- ==========================================
-function s.typefilter(e, c)
-    -- Ajuste o setcode (0x108e) se o seu "Vampire Hunter" tiver um código diferente no seu CDB.
-    return not c:IsSetCard(0x108e) 
-end
-
--- ==========================================
--- EFEITO 4: SUBSTITUIR CUSTO DE LP
+-- 2. REPLACE LP COST BY SENDING FROM DECK TO GY
 -- ==========================================
 function s.lrfilter(c)
-    return c:IsSetCard(0x8e) and c:IsAbleToGraveAsCost()
+	return c:IsSetCard(SET_VAMPIRE) and c:IsAbleToGraveAsCost()
 end
+
 function s.lrcon(e, tp, eg, ep, ev, re, r, rp)
-    if tp ~= ep then return false end
-    if not re or not re:IsActivated() then return false end
-    local rc = re:GetHandler()
-    -- Verifica se quem pede o custo é "Vampire" e se tem carta para enviar pro GY
-    return rc:IsSetCard(0x8e) and Duel.IsExistingMatchingCard(s.lrfilter, tp, LOCATION_DECK, 0, 1, nil)
+	if tp~=ep then return false end
+	if not re or not re:IsActivated() then return false end
+	local rc=re:GetHandler()
+	return rc and rc:IsSetCard(SET_VAMPIRE)
+		and Duel.IsExistingMatchingCard(s.lrfilter, tp, LOCATION_DECK, 0, 1, nil)
 end
+
 function s.lrop(e, tp, eg, ep, ev, re, r, rp)
-    Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_TOGRAVE)
-    local g = Duel.SelectMatchingCard(tp, s.lrfilter, tp, LOCATION_DECK, 0, 1, 1, nil)
-    if #g > 0 then
-        Duel.SendtoGrave(g, REASON_COST)
-    end
+	Duel.Hint(HINT_CARD, 0, id)
+	Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_TOGRAVE)
+	local g=Duel.SelectMatchingCard(tp, s.lrfilter, tp, LOCATION_DECK, 0, 1, 1, nil)
+	if #g>0 then
+		Duel.SendtoGrave(g, REASON_COST)
+	end
 end
 
 -- ==========================================
--- EFEITO 5: RETORNAR BANIDO E DRAW 2
+-- 3. RETURN FROM GY/BANISHMENT & OPTIONAL DESTROY
 -- ==========================================
-function s.tdfilter(c)
-    return c:IsSetCard(0x8e) and c:IsFaceup() and c:IsAbleToGrave()
+function s.rfilter(c)
+	if not (c:IsSetCard(SET_VAMPIRE) and c:IsFaceup()) then return false end
+	if c:IsLocation(LOCATION_GRAVE) then
+		return c:IsAbleToDeck()
+	elseif c:IsLocation(LOCATION_REMOVED) then
+		return c:IsAbleToDeck() or true -- Retornar banido ao GY não exige IsAbleToGrave()
+	end
+	return false
 end
-function s.drawtg(e, tp, eg, ep, ev, re, r, rp, chk, chkc)
-    if chkc then return chkc:IsLocation(LOCATION_REMOVED) and chkc:IsControler(tp) and s.tdfilter(chkc) end
-    if chk == 0 then return Duel.IsExistingTarget(s.tdfilter, tp, LOCATION_REMOVED, 0, 1, nil) end
-    Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_TOGRAVE)
-    local g = Duel.SelectTarget(tp, s.tdfilter, tp, LOCATION_REMOVED, 0, 1, 1, nil)
-    Duel.SetOperationInfo(0, CATEGORY_TOGRAVE, g, 1, 0, 0)
+
+function s.desfilter(c)
+	return c:IsSetCard(SET_VAMPIRE) and (c:IsLocation(LOCATION_HAND) or c:IsFaceup())
 end
-function s.drawop(e, tp, eg, ep, ev, re, r, rp)
-    if not e:GetHandler():IsRelateToEffect(e) then return end
-    local tc = Duel.GetFirstTarget()
-    if tc and tc:IsRelateToEffect(e) and Duel.SendtoGrave(tc, REASON_EFFECT + REASON_RETURN) > 0 then
-        -- Registra a compra dupla na próxima Draw Phase
-        local e1 = Effect.CreateEffect(e:GetHandler())
-        e1:SetType(EFFECT_TYPE_FIELD)
-        e1:SetCode(EFFECT_DRAW_COUNT)
-        e1:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
-        e1:SetTargetRange(1, 0)
-        e1:SetValue(2)
-        e1:SetReset(RESET_PHASE + PHASE_DRAW + RESET_SELF_TURN, 1)
-        Duel.RegisterEffect(e1, tp)
-    end
+
+function s.rtg(e, tp, eg, ep, ev, re, r, rp, chk, chkc)
+	if chkc then return chkc:IsLocation(LOCATION_GRAVE+LOCATION_REMOVED) and chkc:IsControler(tp) and s.rfilter(chkc) end
+	if chk==0 then return Duel.IsExistingTarget(s.rfilter, tp, LOCATION_GRAVE+LOCATION_REMOVED, 0, 1, nil) end
+	Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_TARGET)
+	local g=Duel.SelectTarget(tp, s.rfilter, tp, LOCATION_GRAVE+LOCATION_REMOVED, 0, 1, 1, nil)
+	local tc=g:GetFirst()
+	if tc:IsLocation(LOCATION_GRAVE) then
+		Duel.SetOperationInfo(0, CATEGORY_TODECK, g, 1, 0, 0)
+	else
+		Duel.SetPossibleOperationInfo(0, CATEGORY_TODECK, g, 1, 0, 0)
+		Duel.SetPossibleOperationInfo(0, CATEGORY_TOGRAVE, g, 1, 0, 0)
+	end
+	Duel.SetPossibleOperationInfo(0, CATEGORY_DESTROY, nil, 1, tp, LOCATION_HAND+LOCATION_ONFIELD)
+end
+
+function s.rop(e, tp, eg, ep, ev, re, r, rp)
+	if not e:GetHandler():IsRelateToEffect(e) then return end
+	local tc=Duel.GetFirstTarget()
+	if not tc or not tc:IsRelateToEffect(e) then return end
+
+	local moved=false
+	if tc:IsLocation(LOCATION_GRAVE) then
+		if Duel.SendtoDeck(tc, nil, SEQ_DECKSHUFFLE, REASON_EFFECT)>0 and tc:IsLocation(LOCATION_DECK+LOCATION_EXTRA) then
+			moved=true
+		end
+	elseif tc:IsLocation(LOCATION_REMOVED) then
+		local b1=tc:IsAbleToDeck()
+		local b2=true
+		local op=Duel.SelectEffect(tp,
+			{b1, aux.Stringid(id, 3)},
+			{b2, aux.Stringid(id, 4)})
+		if op==1 then
+			if Duel.SendtoDeck(tc, nil, SEQ_DECKSHUFFLE, REASON_EFFECT)>0 and tc:IsLocation(LOCATION_DECK+LOCATION_EXTRA) then
+				moved=true
+			end
+		else
+			if Duel.SendtoGrave(tc, REASON_EFFECT+REASON_RETURN)>0 and tc:IsLocation(LOCATION_GRAVE) then
+				moved=true
+			end
+		end
+	end
+
+	if moved then
+		local dg=Duel.GetMatchingGroup(s.desfilter, tp, LOCATION_HAND+LOCATION_ONFIELD, 0, nil)
+		if #dg>0 and Duel.SelectYesNo(tp, aux.Stringid(id, 5)) then
+			Duel.BreakEffect()
+			Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_DESTROY)
+			local sg=dg:Select(tp, 1, 1, nil)
+			if sg:GetFirst():IsLocation(LOCATION_ONFIELD) then
+				Duel.HintSelection(sg)
+			end
+			Duel.Destroy(sg, REASON_EFFECT)
+		end
+	end
 end

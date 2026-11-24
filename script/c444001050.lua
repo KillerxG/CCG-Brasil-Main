@@ -1,168 +1,121 @@
--- The Gardener of Vampire Castle
-local s, id = GetID()
-
+--The Gardener of Vampire Castle
+--Scripted by Codex
+local s,id=GetID()
 function s.initial_effect(c)
-    -- 1. Redução de Tributo: Exige apenas 1 Tributo para Invocação-Tributo (Nível 8 -> 1 Tributo)
-    local e0=Effect.CreateEffect(c)
-    e0:SetType(EFFECT_TYPE_SINGLE)
-    e0:SetCode(EFFECT_DECREASE_TRIBUTE)
-    e0:SetValue(0x10001)
-    c:RegisterEffect(e0)
-
-    -- 2. Restrição: Apenas para Invocações de "Vampire"
-    local e1=Effect.CreateEffect(c)
-    e1:SetType(EFFECT_TYPE_SINGLE)
-    e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-    e1:SetCode(EFFECT_CANNOT_BE_MATERIAL)
-    e1:SetValue(s.matlimit)
-    c:RegisterEffect(e1)
-    local e1b=Effect.CreateEffect(c)
-    e1b:SetType(EFFECT_TYPE_SINGLE)
-    e1b:SetProperty(EFFECT_FLAG_SINGLE_RANGE+EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-    e1b:SetRange(LOCATION_MZONE)
-    e1b:SetCode(EFFECT_UNRELEASABLE_SUM)
-    e1b:SetValue(s.matlimit)
-    c:RegisterEffect(e1b)
-    local e1c=e1b:Clone()
-    e1c:SetCode(EFFECT_UNRELEASABLE_NONSUM)
-    c:RegisterEffect(e1c)
-
-    -- 3. Revelar da mão e realizar Invocação-Normal por efeito
-    local e2=Effect.CreateEffect(c)
-    e2:SetDescription(aux.Stringid(id,0))
-    e2:SetCategory(CATEGORY_SUMMON)
-    e2:SetType(EFFECT_TYPE_IGNITION)
-    e2:SetRange(LOCATION_HAND)
-    e2:SetCountLimit(1,id)
-    e2:SetCost(s.normcost)
-    e2:SetTarget(s.normtg)
-    e2:SetOperation(s.normop)
-    c:RegisterEffect(e2)
-
-    -- 4. Invocar 2 Tokens ao ser Invocada (Normal ou Especial)
-    local e3=Effect.CreateEffect(c)
-    e3:SetDescription(aux.Stringid(id,1))
-    e3:SetCategory(CATEGORY_SPECIAL_SUMMON+CATEGORY_TOKEN)
-    e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-    e3:SetProperty(EFFECT_FLAG_DELAY)
-    e3:SetCode(EVENT_SUMMON_SUCCESS)
-    e3:SetTarget(s.tokentg)
-    e3:SetOperation(s.tokenop)
-    c:RegisterEffect(e3)
-    local e3b=e3:Clone()
-    e3b:SetCode(EVENT_SPSUMMON_SUCCESS)
-    c:RegisterEffect(e3b)
-
-    -- 5. Cemitério: Olhar o topo, Zerar ATK/DEF e embaralhar no Deck
-    local e4=Effect.CreateEffect(c)
-    e4:SetDescription(aux.Stringid(id,2))
-    e4:SetCategory(CATEGORY_ATKCHANGE+CATEGORY_DEFCHANGE+CATEGORY_TODECK)
-    e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-    e4:SetCode(EVENT_ATTACK_ANNOUNCE)
-    e4:SetRange(LOCATION_GRAVE)
-    e4:SetCondition(s.topcon)
-    e4:SetTarget(s.toptg)
-    e4:SetOperation(s.topop)
-    c:RegisterEffect(e4)
+	--(1) Tribute Summon this card by Tributing 1 monster
+	aux.AddNormalSummonProcedure(c,true,true,1,1,SUMMON_TYPE_TRIBUTE,aux.Stringid(id,0))
+	--(2) Reveal this card and Normal Summon it
+	local e2=Effect.CreateEffect(c)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetCategory(CATEGORY_SUMMON)
+	e2:SetType(EFFECT_TYPE_IGNITION)
+	e2:SetRange(LOCATION_HAND)
+	e2:SetCountLimit(1,{id,0})
+	e2:SetCost(s.sumcost)
+	e2:SetTarget(s.sumtg)
+	e2:SetOperation(s.sumop)
+	c:RegisterEffect(e2)
+	--(3) Special Summon 1 "The Rose of Vampire Castle Token" to either field
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id,2))
+	e3:SetCategory(CATEGORY_SPECIAL_SUMMON+CATEGORY_TOKEN)
+	e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e3:SetProperty(EFFECT_FLAG_DELAY)
+	e3:SetCode(EVENT_SUMMON_SUCCESS)
+	e3:SetCountLimit(1,{id,1})
+	e3:SetTarget(s.tktg)
+	e3:SetOperation(s.tkop)
+	c:RegisterEffect(e3)
+	local e3b=e3:Clone()
+	e3b:SetCode(EVENT_SPSUMMON_SUCCESS)
+	c:RegisterEffect(e3b)
+	--(4) Change an attacking opponent's monster's ATK/DEF to 0 and banish this card
+	local e4=Effect.CreateEffect(c)
+	e4:SetDescription(aux.Stringid(id,3))
+	e4:SetCategory(CATEGORY_ATKCHANGE+CATEGORY_DEFCHANGE+CATEGORY_REMOVE)
+	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
+	e4:SetCode(EVENT_ATTACK_ANNOUNCE)
+	e4:SetRange(LOCATION_GRAVE)
+	e4:SetCountLimit(1,{id,2})
+	e4:SetCondition(s.atkcon)
+	e4:SetCost(s.atkcost)
+	e4:SetTarget(s.atktg)
+	e4:SetOperation(s.atkop)
+	c:RegisterEffect(e4)
 end
-
-s.listed_series = {0x8e}
-
--- Limite de Material
-function s.matlimit(e,c)
-    if not c then return false end
-    return not c:IsSetCard(0x8e)
+s.listed_names={444001051}
+s.listed_series={0x8e,0x208e}
+--(1) Tribute Summon this card by Tributing 1 monster
+--Handled by aux.AddNormalSummonProcedure
+--(2) Reveal this card and Normal Summon it
+function s.sumcost(e,tp,eg,ep,ev,re,r,rp,chk)
+	local c=e:GetHandler()
+	if chk==0 then return not c:IsPublic() end
+	Duel.ConfirmCards(1-tp,c)
+	Duel.ShuffleHand(tp)
 end
-
--- Efeito 3: Invocação-Normal da Mão por Efeito (Revelar)
-function s.normcost(e,tp,eg,ep,ev,re,r,rp,chk)
-    local c=e:GetHandler()
-    if chk==0 then return not c:IsPublic() end
-    Duel.ConfirmCards(1-tp,c)
-    Duel.ShuffleHand(tp)
+function s.sumtg(e,tp,eg,ep,ev,re,r,rp,chk)
+	local c=e:GetHandler()
+	if chk==0 then return c:IsSummonable(true,nil) end
+	Duel.SetOperationInfo(0,CATEGORY_SUMMON,c,1,tp,LOCATION_HAND)
 end
-
-function s.normtg(e,tp,eg,ep,ev,re,r,rp,chk)
-    local c=e:GetHandler()
-    if chk==0 then return c:IsSummonable(true,nil) end
-    Duel.SetOperationInfo(0,CATEGORY_SUMMON,c,1,0,0)
+function s.sumop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	if c:IsRelateToEffect(e) and c:IsSummonable(true,nil) then Duel.Summon(tp,c,true,nil) end
 end
-
-function s.normop(e,tp,eg,ep,ev,re,r,rp)
-    local c=e:GetHandler()
-    if c:IsRelateToEffect(e) and c:IsSummonable(true,nil) then
-        Duel.Summon(tp,c,true,nil)
-    end
+--(3) Special Summon 1 "The Rose of Vampire Castle Token" to either field
+function s.cantoken(tp,p)
+	return Duel.GetLocationCount(p,LOCATION_MZONE,tp)>0
+		and Duel.IsPlayerCanSpecialSummonMonster(tp,444001051,0x208e,TYPES_TOKEN|TYPE_TUNER,0,0,2,RACE_PLANT,ATTRIBUTE_EARTH,POS_FACEUP,p)
 end
-
--- Efeito 4: Invocação de Tokens
-function s.tokentg(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 or Duel.GetLocationCount(1-tp,LOCATION_MZONE)>0 end
-    Duel.SetOperationInfo(0,CATEGORY_TOKEN,nil,2,0,0)
-    Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,2,PLAYER_ALL,0)
+function s.tktg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return s.cantoken(tp,tp) or s.cantoken(tp,1-tp) end
+	Duel.SetOperationInfo(0,CATEGORY_TOKEN,nil,1,tp,0)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,0)
 end
-
-function s.tokenop(e,tp,eg,ep,ev,re,r,rp)
-    for i=1, 2 do
-        local b1 = Duel.GetLocationCount(tp,LOCATION_MZONE)>0
-        local b2 = Duel.GetLocationCount(1-tp,LOCATION_MZONE)>0
-        if not b1 and not b2 then break end
-        
-        local op = 0
-        if b1 and b2 then
-            op = Duel.SelectOption(tp, aux.Stringid(id,3), aux.Stringid(id,4))
-        elseif b1 then
-            op = 0
-        else
-            op = 1
-        end
-        
-        local target_p = (op==0) and tp or 1-tp
-        local token = Duel.CreateToken(tp, id+1)
-        Duel.SpecialSummonStep(token,0,tp,target_p,false,false,POS_FACEUP)
-    end
-    Duel.SpecialSummonComplete()
+function s.tkop(e,tp,eg,ep,ev,re,r,rp)
+	local b1=s.cantoken(tp,tp)
+	local b2=s.cantoken(tp,1-tp)
+	if not b1 and not b2 then return end
+	local p=tp
+	if b1 and b2 then
+		local op=Duel.SelectOption(tp,aux.Stringid(id,4),aux.Stringid(id,5))
+		p=op==0 and tp or 1-tp
+	elseif b2 then
+		p=1-tp
+	end
+	local token=Duel.CreateToken(tp,444001051)
+	Duel.SpecialSummon(token,0,tp,p,false,false,POS_FACEUP)
 end
-
--- Efeito 5: Cemitério (Ataque do Oponente -> Olhar topo -> Zerar ATK/DEF -> Embaralhar no Deck)
-function s.topcon(e,tp,eg,ep,ev,re,r,rp)
-    return Duel.GetAttacker():IsControler(1-tp)
+--(4) Change an attacking opponent's monster's ATK/DEF to 0 and banish this card
+function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetAttacker()
+	return tc and tc:IsControler(1-tp)
 end
-
-function s.toptg(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.GetFieldGroupCount(tp,LOCATION_DECK,0)>0 and e:GetHandler():IsAbleToDeck() end
-    Duel.SetOperationInfo(0,CATEGORY_TODECK,e:GetHandler(),1,0,0)
+function s.atkcost(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.CheckLPCost(tp,800) end
+	Duel.PayLPCost(tp,800)
 end
-
-function s.topop(e,tp,eg,ep,ev,re,r,rp)
-    local c=e:GetHandler()
-    local at=Duel.GetAttacker() 
-    
-    if Duel.GetFieldGroupCount(tp,LOCATION_DECK,0)==0 then return end
-    
-    Duel.ConfirmDecktop(tp, 1)
-    local g = Duel.GetDecktopGroup(tp, 1)
-    local tc = g:GetFirst()
-    
-    if tc then
-        local is_valid = tc:IsType(TYPE_MONSTER) and (tc:IsRace(RACE_ZOMBIE) or tc:IsRace(RACE_FIEND) or tc:IsSetCard(0x8e))
-        if is_valid then
-            if at and at:IsRelateToBattle() and at:IsFaceup() and not at:IsImmuneToEffect(e) then
-                local e1=Effect.CreateEffect(c)
-                e1:SetType(EFFECT_TYPE_SINGLE)
-                e1:SetCode(EFFECT_SET_ATTACK_FINAL)
-                e1:SetValue(0)
-                e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-                at:RegisterEffect(e1)
-                
-                local e2=e1:Clone()
-                e2:SetCode(EFFECT_SET_DEFENSE_FINAL)
-                at:RegisterEffect(e2)
-                
-                if c:IsRelateToEffect(e) then
-                    Duel.SendtoDeck(c, tp, SEQ_DECKSHUFFLE, REASON_EFFECT)
-                end
-            end
-        end
-    end
+function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
+	local tc=Duel.GetAttacker()
+	if chk==0 then return tc and tc:IsFaceup() and (tc:GetAttack()~=0 or tc:HasDefense() and tc:GetDefense()~=0) end
+	Duel.SetOperationInfo(0,CATEGORY_ATKCHANGE,tc,1,0,0)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_REMOVE,e:GetHandler(),1,tp,LOCATION_GRAVE)
+end
+function s.atkop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	local tc=Duel.GetAttacker()
+	if not tc or not tc:IsRelateToBattle() or not tc:IsFaceup() or tc:IsImmuneToEffect(e) then return end
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_SINGLE)
+	e1:SetCode(EFFECT_SET_ATTACK_FINAL)
+	e1:SetValue(0)
+	e1:SetReset(RESET_EVENT|RESETS_STANDARD|RESET_PHASE|PHASE_END)
+	tc:RegisterEffect(e1)
+	if tc:HasDefense() then
+		local e2=e1:Clone()
+		e2:SetCode(EFFECT_SET_DEFENSE_FINAL)
+		tc:RegisterEffect(e2)
+	end
+	if c:IsRelateToEffect(e) then Duel.Remove(c,POS_FACEUP,REASON_EFFECT) end
 end

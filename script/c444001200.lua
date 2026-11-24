@@ -1,210 +1,141 @@
+--Vampire Hunter Weapon - Vampire Killer
+--Scripted by Codex
 local s,id=GetID()
-
 function s.initial_effect(c)
-	-- Ativação HOPT
-	c:SetUniqueOnField(1,0,id)
+	--Equip limit
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_SINGLE)
+	e0:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
+	e0:SetCode(EFFECT_EQUIP_LIMIT)
+	e0:SetValue(s.eqlimit)
+	c:RegisterEffect(e0)
+	--(1) Special Summon 1 "Vampire Hunter", then equip this card to 1 face-up monster
 	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
 	e1:SetCategory(CATEGORY_SPECIAL_SUMMON+CATEGORY_EQUIP)
 	e1:SetType(EFFECT_TYPE_ACTIVATE)
 	e1:SetCode(EVENT_FREE_CHAIN)
-	e1:SetCountLimit(1,id)
-	e1:SetTarget(s.target)
-	e1:SetOperation(s.activate)
+	e1:SetCountLimit(1,{id,0})
+	e1:SetTarget(s.sptg)
+	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
-
-	-- Todos os monstros do oponente viram DARK
+	--(2) A "Vampire Hunter" monster gains 800 ATK
 	local e2=Effect.CreateEffect(c)
-	e2:SetType(EFFECT_TYPE_FIELD)
-	e2:SetCode(EFFECT_CHANGE_ATTRIBUTE)
-	e2:SetRange(LOCATION_SZONE)
-	e2:SetTargetRange(0,LOCATION_MZONE)
-	e2:SetValue(ATTRIBUTE_DARK)
+	e2:SetType(EFFECT_TYPE_EQUIP)
+	e2:SetCode(EFFECT_UPDATE_ATTACK)
+	e2:SetCondition(s.huntercon)
+	e2:SetValue(800)
 	c:RegisterEffect(e2)
-
-	-- Buff para Caçadores
+	--(3) A "Vampire Hunter" monster can attack all DARK monsters once each
 	local e3=Effect.CreateEffect(c)
 	e3:SetType(EFFECT_TYPE_EQUIP)
-	e3:SetCode(EFFECT_UPDATE_ATTACK)
-	e3:SetCondition(s.mycon)
-	e3:SetValue(800)
+	e3:SetCode(EFFECT_ATTACK_ALL)
+	e3:SetCondition(s.huntercon)
+	e3:SetValue(s.atkfilter)
 	c:RegisterEffect(e3)
-	
+	--(4) Negate a non-"Vampire Hunter" monster's effects
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_EQUIP)
-	e4:SetCode(EFFECT_ATTACK_ALL)
-	e4:SetCondition(s.mycon)
-	e4:SetValue(s.atkfilter)
+	e4:SetCode(EFFECT_DISABLE)
+	e4:SetCondition(s.nonhuntercon)
 	c:RegisterEffect(e4)
-
-	-- Debuff para Não-Caçadores (Nega Efeitos)
+	--(5) A non-"Vampire Hunter" monster becomes DARK
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_EQUIP)
-	e5:SetCode(EFFECT_DISABLE)
-	e5:SetCondition(s.oppcon)
+	e5:SetCode(EFFECT_CHANGE_ATTRIBUTE)
+	e5:SetCondition(s.nonhuntercon)
+	e5:SetValue(ATTRIBUTE_DARK)
 	c:RegisterEffect(e5)
-
-	-- Efeito de Tributar Não-Caçador (HOPT)
-	local e6=Effect.CreateEffect(c)
-	e6:SetDescription(aux.Stringid(id,1))
-	e6:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH+CATEGORY_TOGRAVE)
-	e6:SetType(EFFECT_TYPE_IGNITION)
-	e6:SetRange(LOCATION_SZONE)
-	e6:SetCountLimit(1,id+1)
-	e6:SetCondition(s.tribcon)
-	e6:SetTarget(s.tribtg)
-	e6:SetOperation(s.tribop)
+	--(6) A non-"Vampire Hunter" monster becomes Zombie
+	local e6=e5:Clone()
+	e6:SetCode(EFFECT_CHANGE_RACE)
+	e6:SetValue(RACE_ZOMBIE)
 	c:RegisterEffect(e6)
-
-	-- Efeito de voltar do GY ao invocar Caçador (Sem HOPT no equip, HOPT no add)
+	--(7) If a "Vampire Hunter" monster is Special Summoned, recover this card, then optionally recover 1 "Vampire" card
 	local e7=Effect.CreateEffect(c)
-	e7:SetDescription(aux.Stringid(id,2))
-	e7:SetCategory(CATEGORY_EQUIP+CATEGORY_TOHAND)
+	e7:SetDescription(aux.Stringid(id,1))
+	e7:SetCategory(CATEGORY_TOHAND)
 	e7:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-	e7:SetProperty(EFFECT_FLAG_DELAY+EFFECT_FLAG_CARD_TARGET)
+	e7:SetProperty(EFFECT_FLAG_DELAY)
 	e7:SetCode(EVENT_SPSUMMON_SUCCESS)
 	e7:SetRange(LOCATION_GRAVE)
-	e7:SetCondition(s.gycon)
-	e7:SetTarget(s.gytg)
-	e7:SetOperation(s.gyop)
+	e7:SetCountLimit(1,{id,1})
+	e7:SetCondition(s.thcon)
+	e7:SetTarget(s.thtg)
+	e7:SetOperation(s.thop)
 	c:RegisterEffect(e7)
 end
-
--- === Funções de Ativação ===
-function s.spfilter(c,e,tp)
-	return (c:IsSetCard(0x108e) or c:IsCode(80485722)) and not c:IsType(TYPE_RITUAL) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
-end
-function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
-	local b1 = Duel.IsExistingMatchingCard(Card.IsFaceup,tp,LOCATION_MZONE,LOCATION_MZONE,1,nil)
-	local b2 = Duel.GetLocationCount(tp,LOCATION_MZONE)>0 and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil,e,tp)
-	if chk==0 then return b1 or b2 end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,0,tp,LOCATION_DECK+LOCATION_GRAVE)
-end
-function s.eqlimit(e,c)
-	return c==e:GetLabelObject()
-end
-function s.activate(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	if not c:IsRelateToEffect(e) then return end
-	
-	local can_sp = Duel.GetLocationCount(tp,LOCATION_MZONE)>0 and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil,e,tp)
-	if can_sp and Duel.SelectYesNo(tp,aux.Stringid(id,0)) then
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-		local g=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil,e,tp)
-		if #g>0 then
-			Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
-		end
-	end
-	
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_EQUIP)
-	local eqg=Duel.SelectMatchingCard(tp,Card.IsFaceup,tp,LOCATION_MZONE,LOCATION_MZONE,1,1,nil)
-	local tc=eqg:GetFirst()
-	if tc then
-		Duel.Equip(tp,c,tc)
-		local e1=Effect.CreateEffect(c)
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_EQUIP_LIMIT)
-		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-		e1:SetValue(s.eqlimit)
-		e1:SetLabelObject(tc)
-		c:RegisterEffect(e1)
-	else
-		c:CancelToGrave(false)
-	end
-end
-
--- === Checagens Contínuas ===
-function s.is_hunter(c)
+s.listed_names={80485722}
+s.listed_series={0x8e,0x108e}
+function s.ishunter(c)
 	return c:IsSetCard(0x108e) or c:IsCode(80485722)
 end
-function s.mycon(e)
-	local ec=e:GetHandler():GetEquipTarget()
-	return ec and s.is_hunter(ec)
+function s.eqlimit(e,c)
+	return c:IsFaceup()
 end
-function s.atkfilter(e,c)
-	return c:IsAttribute(ATTRIBUTE_DARK)
+--(1) Special Summon 1 "Vampire Hunter", then equip this card to 1 face-up monster
+function s.spfilter(c,e,tp)
+	return (c:IsCode(80485722) or (c:IsLocation(LOCATION_GRAVE) and c:IsSetCard(0x108e) and c:IsRitualMonster()))
+		and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end
-function s.oppcon(e)
-	local ec=e:GetHandler():GetEquipTarget()
-	return ec and not s.is_hunter(ec)
-end
-
--- === Efeito 6: Tributar e Buscar ===
-function s.tribcon(e,tp,eg,ep,ev,re,r,rp)
-	local ec=e:GetHandler():GetEquipTarget()
-	return ec and not s.is_hunter(ec)
-end
-function s.srchfilter(c)
-	return c:IsSetCard(0x8e) and (c:IsFaceup() or not c:IsLocation(LOCATION_REMOVED))
-end
-function s.tribtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	local ec=e:GetHandler():GetEquipTarget()
-	if chk==0 then return ec and Duel.IsExistingMatchingCard(s.srchfilter,tp,LOCATION_DECK+LOCATION_REMOVED,0,1,nil) end
-	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK+LOCATION_REMOVED)
-end
-function s.tribop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	local ec=c:GetEquipTarget()
-	if not ec or Duel.Release(ec,REASON_EFFECT)==0 then return end
-	
-	-- CORREÇÃO: HINTMSG_ATOHAND é o comando nativo correto
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-	local g=Duel.SelectMatchingCard(tp,s.srchfilter,tp,LOCATION_DECK+LOCATION_REMOVED,0,1,1,nil)
-	local tc=g:GetFirst()
-	if tc then
-		if s.is_hunter(tc) and tc:IsAbleToHand() then
-			Duel.SendtoHand(tc,nil,REASON_EFFECT)
-			Duel.ConfirmCards(1-tp,tc)
-		else
-			Duel.SendtoGrave(tc,REASON_EFFECT+REASON_RETURN)
-		end
-	end
-end
-
--- === Efeito 7: Retornar do GY ===
-function s.cfilter(c,tp)
-	return c:IsFaceup() and s.is_hunter(c) and c:IsControler(tp)
-end
-function s.gycon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.cfilter,1,nil,tp)
-end
-function s.gytg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
-	if chkc then return chkc:IsLocation(LOCATION_MZONE) and s.cfilter(chkc,tp) end
-	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0
-		and Duel.IsExistingTarget(s.cfilter,tp,LOCATION_MZONE,0,1,nil,tp) end
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_EQUIP)
-	Duel.SelectTarget(tp,s.cfilter,tp,LOCATION_MZONE,0,1,1,nil,tp)
+function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+		and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK|LOCATION_GRAVE,0,1,nil,e,tp) end
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_DECK|LOCATION_GRAVE)
 	Duel.SetOperationInfo(0,CATEGORY_EQUIP,e:GetHandler(),1,0,0)
 end
-function s.gyaddfilter(c)
-	return c:IsSetCard(0x8e) and c:IsAbleToHand()
-end
-function s.gyop(e,tp,eg,ep,ev,re,r,rp)
+function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	local tc=Duel.GetFirstTarget()
-	if c:IsRelateToEffect(e) and tc:IsRelateToEffect(e) and tc:IsFaceup() and Duel.Equip(tp,c,tc) then
-		local e1=Effect.CreateEffect(c)
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_EQUIP_LIMIT)
-		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-		e1:SetValue(s.eqlimit)
-		e1:SetLabelObject(tc)
-		c:RegisterEffect(e1)
-		
-		-- HOPT Manual para o "Add" (Checa se já usou a Flag "id+2" neste turno)
-		if Duel.GetFlagEffect(tp,id+2)==0 and Duel.IsExistingMatchingCard(s.gyaddfilter,tp,LOCATION_GRAVE,0,1,c) 
-			and Duel.SelectYesNo(tp,aux.Stringid(id,3)) then
-			
-			-- Registra que usou o add neste turno
-			Duel.RegisterFlagEffect(tp,id+2,RESET_PHASE+PHASE_END,0,1)
-			
-			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-			local sg=Duel.SelectMatchingCard(tp,s.gyaddfilter,tp,LOCATION_GRAVE,0,1,1,c)
-			if #sg>0 then
-				Duel.SendtoHand(sg,nil,REASON_EFFECT)
-				Duel.ConfirmCards(1-tp,sg)
-			end
-		end
-	end
+	if not c:IsRelateToEffect(e) or Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+	local g=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_DECK|LOCATION_GRAVE,0,1,1,nil,e,tp)
+	local tc=g:GetFirst()
+	if not tc or Duel.SpecialSummon(tc,0,tp,tp,false,false,POS_FACEUP)==0 or not c:IsRelateToEffect(e) then return end
+	local fg=Duel.GetMatchingGroup(Card.IsFaceup,tp,LOCATION_MZONE,LOCATION_MZONE,nil)
+	if #fg==0 then return end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_EQUIP)
+	local ec=fg:Select(tp,1,1,nil):GetFirst()
+	if ec then Duel.Equip(tp,c,ec,true) end
+end
+--(2) A "Vampire Hunter" monster gains 800 ATK
+--(3) A "Vampire Hunter" monster can attack all DARK monsters once each
+function s.huntercon(e)
+	local ec=e:GetHandler():GetEquipTarget()
+	return ec and s.ishunter(ec)
+end
+function s.atkfilter(e,c)
+	return c:IsFaceup() and c:IsAttribute(ATTRIBUTE_DARK)
+end
+--(4) Negate a non-"Vampire Hunter" monster's effects
+--(5) A non-"Vampire Hunter" monster becomes DARK
+--(6) A non-"Vampire Hunter" monster becomes Zombie
+function s.nonhuntercon(e)
+	local ec=e:GetHandler():GetEquipTarget()
+	return ec and not s.ishunter(ec)
+end
+--(7) If a "Vampire Hunter" monster is Special Summoned, recover this card, then optionally recover 1 "Vampire" card
+function s.cfilter(c)
+	return s.ishunter(c)
+end
+function s.thcon(e,tp,eg,ep,ev,re,r,rp)
+	return eg:IsExists(s.cfilter,1,nil)
+end
+function s.thfilter(c)
+	return (c:IsSetCard(0x8e) or c:IsCode(80485722)) and c:IsAbleToHand()
+end
+function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
+	local c=e:GetHandler()
+	if chk==0 then return c:IsAbleToHand() end
+	Duel.SetOperationInfo(0,CATEGORY_TOHAND,c,1,tp,LOCATION_GRAVE)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
+end
+function s.thop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	if not c:IsRelateToEffect(e) or Duel.SendtoHand(c,nil,REASON_EFFECT)==0 or not c:IsLocation(LOCATION_HAND) then return end
+	local g=Duel.GetMatchingGroup(aux.NecroValleyFilter(s.thfilter),tp,LOCATION_GRAVE,0,nil)
+	if #g==0 or not Duel.SelectYesNo(tp,aux.Stringid(id,2)) then return end
+	Duel.BreakEffect()
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+	local sg=g:Select(tp,1,1,nil)
+	Duel.SendtoHand(sg,nil,REASON_EFFECT)
 end

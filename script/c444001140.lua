@@ -1,114 +1,122 @@
-Duel.LoadScript("VampireHunter.lua")
+--Vampire Hunter - Sword's Apprentice
+--Scripted by Codex
 local s,id=GetID()
-local ID_SCHOLAR_MAGE = 444001150 -- ID da Charlotte
-
 function s.initial_effect(c)
 	c:EnableReviveLimit()
-	
-	-- 1: Invocação-Ritual (Sem limitação de ativações/turnos)
-    VampireHunter.AddSelfRitual(c,aux.Stringid(id,0))
-
-	-- 2: Invocar a si mesmo (Special Summon Proc)
+	--(1) Reveal this card and Ritual Summon it
+	local params={lvtype=RITPROC_GREATER,filter=function(rc) return rc==c end,matfilter=s.matfilter}
+	local e1=Effect.CreateEffect(c)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_RELEASE+CATEGORY_SPECIAL_SUMMON)
+	e1:SetType(EFFECT_TYPE_IGNITION)
+	e1:SetRange(LOCATION_HAND)
+	e1:SetCountLimit(1,{id,0})
+	e1:SetCost(s.ritcost)
+	e1:SetTarget(Ritual.Target(params))
+	e1:SetOperation(Ritual.Operation(params))
+	c:RegisterEffect(e1)
+	--(2) Add "Vampire Hunter - Scholar Mage", then optionally add 1 "Vampire" monster
 	local e2=Effect.CreateEffect(c)
-	e2:SetType(EFFECT_TYPE_FIELD)
-	e2:SetCode(EFFECT_SPSUMMON_PROC)
-	e2:SetProperty(EFFECT_FLAG_UNCOPYABLE)
-	e2:SetRange(LOCATION_HAND)
-	e2:SetCondition(s.spcon)
-	e2:SetValue(SUMMON_TYPE_RITUAL)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
+	e2:SetCountLimit(1,{id,1})
+	e2:SetCondition(s.thcon)
+	e2:SetTarget(s.thtg)
+	e2:SetOperation(s.thop)
 	c:RegisterEffect(e2)
-
-	-- 3: Efeito 1 (Buscar a Scholar Mage)
-    local e3=Effect.CreateEffect(c)
-    e3:SetDescription(aux.Stringid(id,2))
-    e3:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
-    e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-    e3:SetProperty(EFFECT_FLAG_DELAY)
-    e3:SetCode(EVENT_SPSUMMON_SUCCESS)
-    e3:SetCountLimit(1,id)
-    e3:SetCondition(s.thcon1)
-    e3:SetTarget(s.thtg1)
-    e3:SetOperation(s.thop1)
-    c:RegisterEffect(e3)
-
-    -- 4: Efeito 2 (Buscar o Monstro Vampire)
-    local e4=Effect.CreateEffect(c)
-    e4:SetDescription(aux.Stringid(id,3))
-    e4:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
-    e4:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-    e4:SetProperty(EFFECT_FLAG_DELAY)
-    e4:SetCode(EVENT_SPSUMMON_SUCCESS)
-    e4:SetCountLimit(1,id+1) -- Hard Once Per Turn separado!
-    e4:SetCondition(s.thcon2)
-    e4:SetTarget(s.thtg2)
-    e4:SetOperation(s.thop2)
-    c:RegisterEffect(e4)
-
-	-- 5: Passar Efeito (Usando o Módulo)
-	VampireHunter.RegisterInheritedEffect(c, id, function(rc)
-		local e1=Effect.CreateEffect(rc)
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE+EFFECT_FLAG_CLIENT_HINT)
-		e1:SetDescription(aux.Stringid(id,1)) -- str2 no CDB (Client Hint)
-		e1:SetRange(LOCATION_MZONE)
-		e1:SetCode(EFFECT_CANNOT_BE_EFFECT_TARGET)
-		e1:SetValue(s.tgval)
-		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-		rc:RegisterEffect(e1,true)
-	end)
+	--(3) Protect your "Vampire Hunter" Ritual Monsters from being targeted by opponent's monster effects
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id,2))
+	e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e3:SetProperty(EFFECT_FLAG_DELAY+EFFECT_FLAG_CARD_TARGET)
+	e3:SetCode(EVENT_TO_GRAVE)
+	e3:SetCondition(s.ptcon)
+	e3:SetTarget(s.pttg)
+	e3:SetOperation(s.ptop)
+	c:RegisterEffect(e3)
 end
-
--- === Funções do Efeito 2 (Special Summon) ===
-function s.cfilter(c)
-	return c:IsFaceup() and c:IsCode(ID_SCHOLAR_MAGE) -- Mude para o ID correspondente
+s.listed_names={444001150}
+s.listed_series={0x8e,0x108e}
+--(1) Reveal this card and Ritual Summon it
+function s.ritcost(e,tp,eg,ep,ev,re,r,rp,chk)
+	local c=e:GetHandler()
+	if chk==0 then return not c:IsPublic() end
+	Duel.ConfirmCards(1-tp,c)
+	Duel.ShuffleHand(tp)
 end
-function s.spcon(e,c)
-	if c==nil then return true end
-	return Duel.GetLocationCount(c:GetControler(),LOCATION_MZONE)>0
-		and Duel.IsExistingMatchingCard(s.cfilter,c:GetControler(),LOCATION_MZONE,0,1,nil)
+function s.matfilter(c,e,tp)
+	return c:IsControler(tp) and c:IsLocation(LOCATION_HAND|LOCATION_MZONE)
 end
-
--- === Funções do Efeito 3 (Buscar Charlotte) ===
-function s.thcon1(e,tp,eg,ep,ev,re,r,rp)
-    return e:GetHandler():IsSummonType(SUMMON_TYPE_RITUAL)
+--(2) Add "Vampire Hunter - Scholar Mage", then optionally add 1 "Vampire" monster
+function s.thcon(e,tp,eg,ep,ev,re,r,rp)
+	return e:GetHandler():IsRitualSummoned()
 end
-function s.thfilter1(c)
-    return c:IsCode(ID_SCHOLAR_MAGE) and c:IsAbleToHand()
+function s.scholarfilter(c)
+	return c:IsCode(444001150) and c:IsAbleToHand()
 end
-function s.thtg1(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter1,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil) end
-    Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK+LOCATION_GRAVE)
+function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.scholarfilter,tp,LOCATION_DECK|LOCATION_GRAVE,0,1,nil) end
+	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK|LOCATION_GRAVE)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK)
 end
-function s.thop1(e,tp,eg,ep,ev,re,r,rp)
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-    local g=Duel.SelectMatchingCard(tp,s.thfilter1,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil)
-    if #g>0 then
-        Duel.SendtoHand(g,nil,REASON_EFFECT)
-        Duel.ConfirmCards(1-tp,g)
-    end
+function s.vampfilter(c)
+	return c:IsSetCard(0x8e) and c:IsMonster() and not c:IsCode(id) and c:IsAbleToHand()
 end
-
--- === Funções do Efeito 4 (Buscar Monstro Vampire) ===
-function s.thcon2(e,tp,eg,ep,ev,re,r,rp)
-    return e:GetHandler():IsSummonType(SUMMON_TYPE_RITUAL) and Duel.IsExistingMatchingCard(s.cfilter,tp,LOCATION_MZONE,0,1,nil)
+function s.scholarfieldfilter(c)
+	return c:IsFaceup() and c:IsCode(444001150)
 end
-function s.thfilter2(c)
-    return c:IsSetCard(0x8e) and c:IsType(TYPE_MONSTER) and c:IsAbleToHand()
+function s.thop(e,tp,eg,ep,ev,re,r,rp)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.scholarfilter),tp,LOCATION_DECK|LOCATION_GRAVE,0,1,1,nil)
+	if #g==0 or Duel.SendtoHand(g,nil,REASON_EFFECT)==0 then return end
+	Duel.ConfirmCards(1-tp,g)
+	if not Duel.IsExistingMatchingCard(s.scholarfieldfilter,tp,LOCATION_MZONE,0,1,nil)
+		or not Duel.IsExistingMatchingCard(s.vampfilter,tp,LOCATION_DECK,0,1,nil)
+		or not Duel.SelectYesNo(tp,aux.Stringid(id,4)) then return end
+	Duel.BreakEffect()
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+	local sg=Duel.SelectMatchingCard(tp,s.vampfilter,tp,LOCATION_DECK,0,1,1,nil)
+	if #sg>0 then
+		Duel.SendtoHand(sg,nil,REASON_EFFECT)
+		Duel.ConfirmCards(1-tp,sg)
+	end
 end
-function s.thtg2(e,tp,eg,ep,ev,re,r,rp,chk)
-    if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter2,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,nil) end
-    Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK+LOCATION_GRAVE)
+--(3) Protect your "Vampire Hunter" Ritual Monsters from being targeted by opponent's monster effects
+function s.ptcon(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	return c:IsPreviousLocation(LOCATION_MZONE) and c:IsRitualSummoned()
 end
-function s.thop2(e,tp,eg,ep,ev,re,r,rp)
-    Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-    local g=Duel.SelectMatchingCard(tp,s.thfilter2,tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil)
-    if #g>0 then
-        Duel.SendtoHand(g,nil,REASON_EFFECT)
-        Duel.ConfirmCards(1-tp,g)
-    end
+function s.ptfilter(c)
+	return c:IsFaceup() and c:IsSetCard(0x108e) and c:IsRitualMonster()
 end
-
--- === Função do Efeito 5 (Proteção Alvo) ===
-function s.tgval(e,re,rp)
-	return re:IsActiveType(TYPE_MONSTER) and rp~=e:GetHandlerPlayer()
+function s.pttg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+	if chkc then return chkc:IsControler(tp) and chkc:IsLocation(LOCATION_MZONE) and s.ptfilter(chkc) end
+	if chk==0 then return Duel.IsExistingTarget(s.ptfilter,tp,LOCATION_MZONE,0,1,nil) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TARGET)
+	local g=Duel.SelectTarget(tp,s.ptfilter,tp,LOCATION_MZONE,0,1,1,nil)
+	Duel.SetOperationInfo(0,0,g,1,tp,LOCATION_MZONE)
+end
+function s.protectfilter(e,c)
+	return c:IsFaceup() and c:IsSetCard(0x108e) and c:IsRitualMonster()
+end
+function s.targetvalue(e,re,rp)
+	return rp~=e:GetHandlerPlayer() and re:IsMonsterEffect()
+end
+function s.ptop(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetFirstTarget()
+	if not tc or not tc:IsRelateToEffect(e) or not tc:IsFaceup() then return end
+	local e1=Effect.CreateEffect(tc)
+	e1:SetDescription(aux.Stringid(id,3))
+	e1:SetType(EFFECT_TYPE_FIELD)
+	e1:SetProperty(EFFECT_FLAG_IGNORE_IMMUNE+EFFECT_FLAG_CLIENT_HINT)
+	e1:SetCode(EFFECT_CANNOT_BE_EFFECT_TARGET)
+	e1:SetRange(LOCATION_MZONE)
+	e1:SetTargetRange(LOCATION_MZONE,0)
+	e1:SetTarget(s.protectfilter)
+	e1:SetValue(s.targetvalue)
+	e1:SetReset(RESET_EVENT|RESETS_STANDARD)
+	tc:RegisterEffect(e1)
 end
